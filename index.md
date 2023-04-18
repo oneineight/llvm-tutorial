@@ -1,4 +1,4 @@
-# {{ title }}
+# {{ page.title }}
 
 * [1. Lexer](lexer.md)
 * [2. Parser](parser.md)
