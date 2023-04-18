@@ -1,4 +1,4 @@
-# Code Generation to LLVM IR
+# 3. Code Generation to LLVM IR
 
 Welcome to Chapter 3 of the "Implementing a language with LLVM" tutorial. This chapter shows you how to transform the Abstract Syntax Tree, built in Chapter 2, into LLVM IR. This will teach you a little bit about how LLVM does things, as well as demonstrate how easy it is to use. It's much more work to build a lexer and parser than it is to generate LLVM IR code. :)
 
