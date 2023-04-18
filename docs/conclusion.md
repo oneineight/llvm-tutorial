@@ -36,7 +36,7 @@ The fact that LLVM provides a compact, target-independent, representation for co
 
 The problem with C (again, in its full generality) is that it is heavily laden with target specific assumptions. As one simple example, the preprocessor often destructively removes target-independence from the code when it processes the input text:
 
-```
+```c++
 #ifdef __i386__
   int X = 1;
 #else

@@ -9,7 +9,7 @@ Please note: the code in this chapter and later require LLVM 2.2 or later. LLVM 
 
 In order to generate LLVM IR, we want some simple setup to get started. First we define virtual code generation (codegen) methods in each AST class:
 
-```
+```c++
 /// ExprAST - Base class for all expression nodes.
 class ExprAST {
 public:
@@ -33,7 +33,7 @@ Note that instead of adding virtual methods to the ExprAST class hierarchy, it c
 
 The second thing we want is an `Error` method like we used for the parser, which will be used to report errors found during code generation (for example, use of an undeclared parameter):
 
-```
+```c++
 Value *ErrorV(const char *Str) { Error(Str); return 0; }
 
 static Module *TheModule;
@@ -54,7 +54,7 @@ With these basics in place, we can start talking about how to generate code for 
 
 Generating LLVM code for expression nodes is very straightforward: less than 45 lines of commented code for all four of our expression nodes. First we'll do numeric literals:
 
-```
+```c++
 Value *NumberExprAST::Codegen() {
   return ConstantFP::get(getGlobalContext(), APFloat(Val));
 }
@@ -62,7 +62,7 @@ Value *NumberExprAST::Codegen() {
 
 In the LLVM IR, numeric constants are represented with the ConstantFP class, which holds the numeric value in an APFloat internally (APFloat has the capability of holding floating point constants of Arbitrary Precision). This code basically just creates and returns a ConstantFP. Note that in the LLVM IR that constants are all uniqued together and shared. For this reason, the API uses the `foo::get(...)` idiom instead of `new foo(..)` or `foo::Create(..)`.
 
-```
+```c++
 Value *VariableExprAST::Codegen() {
   // Look this variable up in the function.
   Value *V = NamedValues[Name];
@@ -72,7 +72,7 @@ Value *VariableExprAST::Codegen() {
 
 References to variables are also quite simple using LLVM. In the simple version of Kaleidoscope, we assume that the variable has already been emitted somewhere and its value is available. In practice, the only values that can be in the NamedValues map are function arguments. This code simply checks to see that the specified name is in the map (if not, an unknown variable is being referenced) and returns the value for it. In future chapters, we'll add support for loop induction variables in the symbol table, and for local variables.
 
-```
+```c++
 Value *BinaryExprAST::Codegen() {
   Value *L = LHS->Codegen();
   Value *R = RHS->Codegen();
@@ -102,7 +102,7 @@ LLVM instructions are constrained by strict rules: for example, the Left and Rig
 
 On the other hand, LLVM specifies that the fcmp instruction always returns an ‘i1' value (a one bit integer). The problem with this is that Kaleidoscope wants the value to be a 0.0 or 1.0 value. In order to get these semantics, we combine the fcmp instruction with a uitofp instruction. This instruction converts its input integer into a floating point value by treating the input as an unsigned value. In contrast, if we used the sitofp instruction, the Kaleidoscope ‘<' operator would return 0.0 and -1.0, depending on the input value.
 
-```
+```c++
 Value *CallExprAST::Codegen() {
   // Look up the name in the global module table.
   Function *CalleeF = TheModule->getFunction(Callee);
@@ -134,7 +134,7 @@ This wraps up our handling of the four basic expressions that we have so far in 
 
 Code generation for prototypes and functions must handle a number of details, which make their code less beautiful than expression code generation, but allows us to illustrate some important points. First, lets talk about code generation for prototypes: they are used both for function bodies and external function declarations. The code starts with:
 
-```
+```c++
 Function *PrototypeAST::Codegen() {
   // Make the function type:  double(double,double) etc.
   std::vector<Type*> Doubles(Args.size(),
@@ -151,7 +151,7 @@ The call to FunctionType::get creates the FunctionType that should be used for a
 
 The final line above actually creates the function that the prototype will correspond to. This indicates the type, linkage and name to use, as well as which module to insert into. "external linkage" means that the function may be defined outside the current module and/or that it is callable by functions outside the module. The Name passed in is the name the user specified: since "TheModule" is specified, this name is registered in "TheModule"s symbol table, which is used by the function call code above.
 
-```
+```c++
 // If F conflicted, there was already something named 'Name'.  If it has a
 // body, don't allow redefinition or reextern.
 if (F->getName() != Name) {
@@ -166,7 +166,7 @@ In Kaleidoscope, I choose to allow redefinitions of functions in two cases: firs
 
 In order to implement this, the code above first checks to see if there is a collision on the name of the function. If so, it deletes the function we just created (by calling eraseFromParent) and then calling getFunction to get the existing function with the specified name. Note that many APIs in LLVM have "erase" forms and "remove" forms. The "remove" form unlinks the object from its parent (e.g. a Function from a Module) and returns it. The "erase" form unlinks the object and then deletes it.
 
-```
+```c++
   // If F already has a body, reject this.
   if (!F->empty()) {
     ErrorF("redefinition of function");
@@ -183,7 +183,7 @@ In order to implement this, the code above first checks to see if there is a col
 
 In order to verify the logic above, we first check to see if the pre-existing function is "empty". In this case, empty means that it has no basic blocks in it, which means it has no body. If it has no body, it is a forward declaration. Since we don't allow anything after a full definition of the function, the code rejects this case. If the previous reference to a function was an ‘extern', we simply verify that the number of arguments for that definition and this one match up. If not, we emit an error.
 
-```
+```c++
   // Set names for all arguments.
   unsigned Idx = 0;
   for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size();
@@ -199,7 +199,7 @@ In order to verify the logic above, we first check to see if the pre-existing fu
 
 The last bit of code for prototypes loops over all of the arguments in the function, setting the name of the LLVM Argument objects to match, and registering the arguments in the NamedValues map for future use by the VariableExprAST AST node. Once this is set up, it returns the Function object to the caller. Note that we don't check for conflicting argument names here (e.g. "extern foo(a b a)"). Doing so would be very straight-forward with the mechanics we have already used above.
 
-```
+```c++
 Function *FunctionAST::Codegen() {
   NamedValues.clear();
 
@@ -210,7 +210,7 @@ Function *FunctionAST::Codegen() {
 
 Code generation for function definitions starts out simply enough: we just codegen the prototype (Proto) and verify that it is ok. We then clear out the NamedValues map to make sure that there isn't anything in it from the last function we compiled. Code generation of the prototype ensures that there is an LLVM Function object that is ready to go for us.
 
-```
+```c++
 // Create a new basic block to start insertion into.
 BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", TheFunction);
 Builder.SetInsertPoint(BB);
@@ -220,7 +220,7 @@ if (Value *RetVal = Body->Codegen()) {
 
 Now we get to the point where the Builder is set up. The first line creates a new basic block (named "entry"), which is inserted into TheFunction. The second line then tells the builder that new instructions should be inserted into the end of the new basic block. Basic blocks in LLVM are an important part of functions that define the Control Flow Graph. Since we don't have any control flow, our functions will only contain one block at this point. We'll fix this in Chapter 5 :).
 
-```
+```c++
 if (Value *RetVal = Body->Codegen()) {
   // Finish off the function.
   Builder.CreateRet(RetVal);
@@ -234,7 +234,7 @@ if (Value *RetVal = Body->Codegen()) {
 
 Once the insertion point is set up, we call the CodeGen() method for the root expression of the function. If no error happens, this emits code to compute the expression into the entry block and returns the value that was computed. Assuming no error, we then create an LLVM ret instruction, which completes the function. Once the function is built, we call verifyFunction, which is provided by LLVM. This function does a variety of consistency checks on the generated code, to determine if our compiler is doing everything right. Using this is important: it can catch a lot of bugs. Once the function is finished and validated, we return it.
 
-```
+```c++
   // Error reading body, remove function.
   TheFunction->eraseFromParent();
   return 0;
@@ -245,7 +245,7 @@ The only piece left here is handling of the error case. For simplicity, we handl
 
 This code does have a bug, though. Since the `PrototypeAST::Codegen` can return a previously defined forward declaration, our code can actually delete a forward declaration. There are a number of ways to fix this bug, see what you can come up with! Here is a testcase:
 
-```
+```c++
 extern foo(a b);     # ok, defines foo.
 def foo(a b) c;      # error, 'c' is invalid.
 def bar() foo(1, 2); # error, unknown function "foo"
@@ -256,7 +256,7 @@ def bar() foo(1, 2); # error, unknown function "foo"
 
 For now, code generation to LLVM doesn't really get us much, except that we can look at the pretty IR calls. The sample code inserts calls to Codegen into the `HandleDefinition`, `HandleExtern` etc functions, and then dumps out the LLVM IR. This gives a nice way to look at the LLVM IR for simple functions. For example:
 
-```
+```c++
 ready> 4+5;
 Read top-level expression:
 define double @0() {
@@ -267,7 +267,7 @@ entry:
 
 Note how the parser turns the top-level expression into anonymous functions for us. This will be handy when we add JIT support in the next chapter. Also note that the code is very literally transcribed, no optimizations are being performed except simple constant folding done by IRBuilder. We will add optimizations explicitly in the next chapter.
 
-```
+```c++
 ready> def foo(a b) a*a + 2*a*b + b*b;
 Read function definition:
 define double @foo(double %a, double %b) {
@@ -284,7 +284,7 @@ entry:
 
 This shows some simple arithmetic. Notice the striking similarity to the LLVM builder calls that we use to create the instructions.
 
-```
+```c++
 ready> def bar(a) foo(a, 4.0) + bar(31337);
 Read function definition:
 define double @bar(double %a) {
@@ -298,7 +298,7 @@ entry:
 
 This shows some function calls. Note that this function will take a long time to execute if you call it. In the future we'll add conditional control flow to actually make recursion useful :).
 
-```
+```c++
 ready> extern cos(x);
 Read extern:
 declare double @cos(double)

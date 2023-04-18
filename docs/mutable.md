@@ -14,7 +14,7 @@ The short (and happy) summary of this chapter is that there is no need for your 
 
 To understand why mutable variables cause complexities in SSA construction, consider this extremely simple C example:
 
-```
+```c++
 int G, H;
 int test(_Bool Condition) {
   int X;
@@ -28,7 +28,7 @@ int test(_Bool Condition) {
 
 In this case, we have the variable “X”, whose value depends on the path executed in the program. Because there are two different possible values for X before the return instruction, a PHI node is inserted to merge the two values. The LLVM IR that we want for this example looks like this:
 
-```
+```c++
 @G = weak global i32 0   ; type of @G is i32*
 @H = weak global i32 0   ; type of @H is i32*
 
@@ -63,7 +63,7 @@ With this in mind, the high-level idea is that we want to make a stack variable 
 
 In LLVM, all memory accesses are explicit with load/store instructions, and it is carefully designed not to have (or need) an “address-of” operator. Notice how the type of the @G/@H global variables is actually “i32*” even though the variable is defined as `i32`. What this means is that @G defines space for an i32 in the global data area, but its name actually refers to the address for that space. Stack variables work the same way, except that instead of being declared with global variable definitions, they are declared with the LLVM alloca instruction:
 
-```
+```c++
 define i32 @example() {
 entry:
   %X = alloca i32           ; type of %X is i32*.
@@ -76,7 +76,7 @@ entry:
 
 This code shows an example of how you can declare and manipulate a stack variable in the LLVM IR. Stack memory allocated with the alloca instruction is fully general: you can pass the address of the stack slot to functions, you can store it in other variables, etc. In our example above, we could rewrite the example to use the alloca technique to avoid using a PHI node:
 
-```
+```c++
 @G = weak global i32 0   ; type of @G is i32*
 @H = weak global i32 0   ; type of @H is i32*
 
@@ -109,7 +109,7 @@ Each update of the variable becomes a store to the stack.
 Taking the address of a variable just uses the stack address directly.
 While this solution has solved our immediate problem, it introduced another one: we have now apparently introduced a lot of stack traffic for very simple and common operations, a major performance problem. Fortunately for us, the LLVM optimizer has a highly-tuned optimization pass named “mem2reg” that handles this case, promoting allocas like this into SSA registers, inserting Phi nodes as appropriate. If you run this example through the pass, for example, you’ll get:
 
-```
+```c++
 $ llvm-as < example.ll | opt -mem2reg | llvm-dis
 @G = weak global i32 0
 @H = weak global i32 0
@@ -154,7 +154,7 @@ The ability to mutate variables with the `=` operator.
 The ability to define new variables.
 While the first item is really what this is about, we only have variables for incoming arguments as well as for induction variables, and redefining those only goes so far :). Also, the ability to define new variables is a useful thing regardless of whether you will be mutating them. Here’s a motivating example that shows how we could use these:
 
-```
+```c++
 # Define ':' for sequencing: as a low-precedence operator that ignores operands
 # and just returns the RHS.
 def binary : 1 (x y) y;
@@ -190,13 +190,13 @@ At this point in Kaleidoscope’s development, it only supports variables for tw
 
 To start our transformation of Kaleidoscope, we’ll change the NamedValues map so that it maps to `AllocaInst*` instead of `Value*`. Once we do this, the C++ compiler will tell us what parts of the code we need to update:
 
-```
+```c++
 static std::map<std::string, AllocaInst*> NamedValues;
 ```
 
 Also, since we will need to create these alloca’s, we’ll use a helper function that ensures that the allocas are created in the entry block of the function:
 
-```
+```c++
 /// CreateEntryBlockAlloca - Create an alloca instruction in the entry block of
 /// the function.  This is used for mutable variables etc.
 static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
@@ -212,7 +212,7 @@ This funny looking code creates an IRBuilder object that is pointing at the firs
 
 With this in place, the first functionality change we want to make is to variable references. In our new scheme, variables live on the stack, so code generating a reference to them actually needs to produce a load from the stack slot:
 
-```
+```c++
 Value *VariableExprAST::Codegen() {
   // Look this variable up in the function.
   Value *V = NamedValues[Name];
@@ -225,7 +225,7 @@ Value *VariableExprAST::Codegen() {
 
 As you can see, this is pretty straightforward. Now we need to update the things that define the variables to set up the alloca. We’ll start with ForExprAST::Codegen (see the full code listing for the unabridged code):
 
-```
+```c++
 Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
 // Create an alloca for the variable in the entry block.
@@ -255,7 +255,7 @@ This code is virtually identical to the code before we allowed mutable variables
 
 To support mutable argument variables, we need to also make allocas for them. The code for this is also pretty simple:
 
-```
+```c++
 /// CreateArgumentAllocas - Create an alloca for each argument and register the
 /// argument in the symbol table so that references to it will succeed.
 void PrototypeAST::CreateArgumentAllocas(Function *F) {
@@ -277,7 +277,7 @@ For each argument, we make an alloca, store the input value to the function into
 
 The final missing piece is adding the mem2reg pass, which allows us to get good codegen once again:
 
-```
+```c++
 // Set up the optimizer pipeline.  Start with registering info about how the
 // target lays out data structures.
 OurFPM.add(new DataLayout(*TheExecutionEngine->getDataLayout()));
@@ -322,7 +322,7 @@ Here there is only one variable (x, the input argument) but you can still see th
 
 Here is the code after the mem2reg pass runs:
 
-```
+```c++
 define double @fib(double %x) {
 entry:
   %cmptmp = fcmp ult double %x, 3.000000e+00
@@ -351,7 +351,7 @@ This is a trivial case for mem2reg, since there are no redefinitions of the vari
 
 After the rest of the optimizers run, we get:
 
-```
+```c++
 define double @fib(double %x) {
 entry:
   %cmptmp = fcmp ult double %x, 3.000000e+00
@@ -381,7 +381,7 @@ Now that all symbol table references are updated to use stack variables, we’ll
 
 With our current framework, adding a new assignment operator is really simple. We will parse it just like any other binary operator, but handle it internally (instead of allowing the user to define it). The first step is to set a precedence:
 
-```
+```c++
 int main() {
   // Install standard binary operators.
   // 1 is lowest precedence.
@@ -393,7 +393,7 @@ int main() {
 
 Now that the parser knows the precedence of the binary operator, it takes care of all the parsing and AST generation. We just need to implement codegen for the assignment operator. This looks like:
 
-```
+```c++
 Value *BinaryExprAST::Codegen() {
   // Special case '=' because we don't want to emit the LHS as an expression.
   if (Op == '=') {
@@ -405,7 +405,7 @@ Value *BinaryExprAST::Codegen() {
 
 Unlike the rest of the binary operators, our assignment operator doesn’t follow the “emit LHS, emit RHS, do computation” model. As such, it is handled as a special case before the other binary operators are handled. The other strange thing is that it requires the LHS to be a variable. It is invalid to have “(x+1) = expr” - only things like “x = expr” are allowed.
 
-```
+```c++
   // Codegen the RHS.
   Value *Val = RHS->Codegen();
   if (Val == 0) return 0;
@@ -424,7 +424,7 @@ Once we have the variable, codegen’ing the assignment is straightforward: we e
 
 Now that we have an assignment operator, we can mutate loop variables and arguments. For example, we can now run code like this:
 
-```
+```c++
 # Function to print a double.
 extern printd(x);
 
@@ -447,7 +447,7 @@ When run, this example prints “123” and then “4”, showing that we did ac
 
 Adding var/in is just like any other other extensions we made to Kaleidoscope: we extend the lexer, the parser, the AST and the code generator. The first step for adding our new ‘var/in’ construct is to extend the lexer. As before, this is pretty trivial, the code looks like this:
 
-```
+```c++
 enum Token {
   ...
   // var definition
@@ -467,7 +467,7 @@ static int gettok() {
 
 The next step is to define the AST node that we will construct. For var/in, it looks like this:
 
-```
+```c++
 /// VarExprAST - Expression class for var/in
 class VarExprAST : public ExprAST {
   std::vector<std::pair<std::string, ExprAST*> > VarNames;
@@ -485,7 +485,7 @@ var/in allows a list of names to be defined all at once, and each name can optio
 
 With this in place, we can define the parser pieces. The first thing we do is add it as a primary expression:
 
-```
+```c++
 /// primary
 ///   ::= identifierexpr
 ///   ::= numberexpr
@@ -508,7 +508,7 @@ static ExprAST *ParsePrimary() {
 
 Next we define ParseVarExpr:
 
-```
+```c++
 /// varexpr ::= 'var' identifier ('=' expression)?
 //                    (',' identifier ('=' expression)?)* 'in' expression
 static ExprAST *ParseVarExpr() {
@@ -547,7 +547,7 @@ while (1) {
 
 Once all the variables are parsed, we then parse the body and create the AST node:
 
-```
+```c++
   // At this point, we have to have 'in'.
   if (CurTok != tok_in)
     return Error("expected 'in' keyword after 'var'");
@@ -562,7 +562,7 @@ Once all the variables are parsed, we then parse the body and create the AST nod
 
 Now that we can parse and represent the code, we need to support emission of LLVM IR for it. This code starts out with:
 
-```
+```c++
 Value *VarExprAST::Codegen() {
   std::vector<AllocaInst *> OldBindings;
 
@@ -576,7 +576,7 @@ Value *VarExprAST::Codegen() {
 
 Basically it loops over all the variables, installing them one at a time. For each variable we put into the symbol table, we remember the previous value that we replace in OldBindings.
 
-```
+```c++
   // Emit the initializer before adding the variable to scope, this prevents
   // the initializer from referencing the variable itself, and permits stuff
   // like this:
@@ -604,7 +604,7 @@ Basically it loops over all the variables, installing them one at a time. For ea
 
 There are more comments here than code. The basic idea is that we emit the initializer, create the alloca, then update the symbol table to point to it. Once all the variables are installed in the symbol table, we evaluate the body of the var/in expression:
 
-```
+```c++
 // Codegen the body, now that all vars are in scope.
 Value *BodyVal = Body->Codegen();
 if (BodyVal == 0) return 0;

@@ -9,7 +9,7 @@ Extending Kaleidoscope to support if/then/else is quite straightforward. It basi
 
 Before we get going on "how" we add this extension, lets talk about "what" we want. The basic idea is that we want to be able to write this sort of thing:
 
-```
+```c++
 def fib(x)
   if x < 3 then
     1
@@ -28,7 +28,7 @@ Now that we know what we "want", lets break this down into its constituent piece
 
 The lexer extensions are straightforward. First we add new enum values for the relevant tokens:
 
-```
+```c++
 // control
 tok_if = -6, tok_then = -7, tok_else = -8,
 Once we have that, we recognize the new keywords in the lexer. This is pretty simple stuff:
@@ -47,7 +47,7 @@ return tok_identifier;
 
 To represent the new expression we add a new AST node for it:
 
-```
+```c++
 /// IfExprAST - Expression class for if/then/else.
 class IfExprAST : public ExprAST {
   ExprAST *Cond, *Then, *Else;
@@ -65,7 +65,7 @@ The AST node just has pointers to the various subexpressions.
 
 Now that we have the relevant tokens coming from the lexer and we have the AST node to build, our parsing logic is relatively straightforward. First we define a new parsing function:
 
-```
+```c++
 /// ifexpr ::= 'if' expression 'then' expression 'else' expression
 static ExprAST *ParseIfExpr() {
   getNextToken();  // eat the if.
@@ -95,7 +95,7 @@ static ExprAST *ParseIfExpr() {
 
 Next we hook it up as a primary expression:
 
-```
+```c++
 static ExprAST *ParsePrimary() {
   switch (CurTok) {
   default: return Error("unknown token when expecting an expression");
@@ -113,7 +113,7 @@ Now that we have it parsing and building the AST, the final piece is adding LLVM
 
 To motivate the code we want to produce, lets take a look at a simple example. Consider:
 
-```
+```c++
 extern foo();
 extern bar();
 def baz(x) if x then foo() else bar();
@@ -173,7 +173,7 @@ Okay, enough of the motivation and overview, lets generate code!
 
 In order to generate code for this, we implement the Codegen method for IfExprAST:
 
-```
+```c++
 Value *IfExprAST::Codegen() {
   Value *CondV = Cond->Codegen();
   if (CondV == 0) return 0;
@@ -201,7 +201,7 @@ Once it has that, it creates three blocks. Note that it passes "TheFunction" int
 
 Once the blocks are created, we can emit the conditional branch that chooses between them. Note that creating new blocks does not implicitly affect the IRBuilder, so it is still inserting into the block that the condition went into. Also note that it is creating a branch to the `then` block and the `else` block, even though the `else` block isn't inserted into the function yet. This is all ok: it is the standard way that LLVM supports forward references.
 
-```
+```c++
 // Emit then value.
 Builder.SetInsertPoint(ThenBB);
 
@@ -219,7 +219,7 @@ Once the insertion point is set, we recursively codegen the `then` expression fr
 
 The final line here is quite subtle, but is very important. The basic issue is that when we create the Phi node in the merge block, we need to set up the block/value pairs that indicate how the Phi will work. Importantly, the Phi node expects to have an entry for each predecessor of the block in the CFG. Why then, are we getting the current block when we just set it to ThenBB 5 lines above? The problem is that the `then` expression may actually itself change the block that the Builder is emitting into if, for example, it contains a nested "if/then/else" expression. Because calling Codegen recursively could arbitrarily change the notion of the current block, we are required to get an up-to-date value for code that will set up the Phi node.
 
-```
+```c++
 // Emit else block.
 TheFunction->getBasicBlockList().push_back(ElseBB);
 Builder.SetInsertPoint(ElseBB);
@@ -255,7 +255,7 @@ Overall, we now have the ability to execute conditional code in Kaleidoscope. Wi
 
 Now that we know how to add basic control flow constructs to the language, we have the tools to add more powerful things. Lets add something more aggressive, a `for` expression:
 
-```
+```c++
 extern putchard(char)
 def printstar(n)
   for i = 1, i < n, 1.0 in
@@ -274,7 +274,7 @@ As before, lets talk about the changes that we need to Kaleidoscope to support t
 
 The lexer extensions are the same sort of thing as for if/then/else:
 
-```
+```c++
 ... in enum Token ...
 // control
 tok_if = -6, tok_then = -7, tok_else = -8,
@@ -296,7 +296,7 @@ return tok_identifier;
 
 The AST node is just as simple. It basically boils down to capturing the variable name and the constituent expressions in the node.
 
-```
+```c++
 /// ForExprAST - Expression class for for/in.
 class ForExprAST : public ExprAST {
   std::string VarName;
@@ -313,7 +313,7 @@ public:
 
 The parser code is also fairly standard. The only interesting thing here is handling of the optional step value. The parser code handles it by checking to see if the second comma is present. If not, it sets the step value to null in the AST node:
 
-```
+```c++
 /// forexpr ::= 'for' identifier '=' expr ',' expr (',' expr)? 'in' expression
 static ExprAST *ParseForExpr() {
   getNextToken();  // eat the for.
@@ -362,7 +362,7 @@ static ExprAST *ParseForExpr() {
 
 Now we get to the good part: the LLVM IR we want to generate for this thing. With the simple example above, we get this LLVM IR (note that this dump is generated with optimizations disabled for clarity):
 
-```
+```c++
 declare double @putchard(double)
 
 define double @printstar(double %n) {
@@ -395,7 +395,7 @@ This loop contains all the same constructs we saw before: a phi node, several ex
 
 The first part of Codegen is very simple: we just output the start expression for the loop value:
 
-```
+```c++
 Value *ForExprAST::Codegen() {
   // Emit the start code first, without 'variable' in scope.
   Value *StartVal = Start->Codegen();
@@ -404,7 +404,7 @@ Value *ForExprAST::Codegen() {
 
 With this out of the way, the next step is to set up the LLVM basic block for the start of the loop body. In the case above, the whole loop body is one block, but remember that the body code itself could consist of multiple blocks (e.g. if it contains an if/then/else or a for/in expression).
 
-```
+```c++
 // Make the new basic block for the loop header, inserting after current
 // block.
 Function *TheFunction = Builder.GetInsertBlock()->getParent();
@@ -417,7 +417,7 @@ Builder.CreateBr(LoopBB);
 
 This code is similar to what we saw for if/then/else. Because we will need it to create the Phi node, we remember the block that falls through into the loop. Once we have that, we create the actual block that starts the loop and create an unconditional branch for the fall-through between the two blocks.
 
-```
+```c++
 // Start insertion in LoopBB.
 Builder.SetInsertPoint(LoopBB);
 
@@ -428,7 +428,7 @@ Variable->addIncoming(StartVal, PreheaderBB);
 
 Now that the "preheader" for the loop is set up, we switch to emitting code for the loop body. To begin with, we move the insertion point and create the PHI node for the loop induction variable. Since we already know the incoming value for the starting value, we add it to the Phi node. Note that the Phi will eventually get a second value for the backedge, but we can't set it up yet (because it doesn't exist!).
 
-```
+```c++
 // Within the loop, the variable is defined equal to the PHI node.  If it
 // shadows an existing variable, we have to restore it, so save it now.
 Value *OldVal = NamedValues[VarName];
@@ -445,7 +445,7 @@ Now the code starts to get more interesting. Our 'for' loop introduces a new var
 
 Once the loop variable is set into the symbol table, the code recursively codegen's the body. This allows the body to use the loop variable: any references to it will naturally find it in the symbol table.
 
-```
+```c++
 // Emit the step value.
 Value *StepVal;
 if (Step) {
@@ -461,7 +461,7 @@ Value *NextVar = Builder.CreateFAdd(Variable, StepVal, "nextvar");
 
 Now that the body is emitted, we compute the next value of the iteration variable by adding the step value, or 1.0 if it isn't present. `NextVar` will be the value of the loop variable on the next iteration of the loop.
 
-```
+```c++
 // Compute the end condition.
 Value *EndCond = End->Codegen();
 if (EndCond == 0) return EndCond;
@@ -474,7 +474,7 @@ EndCond = Builder.CreateFCmpONE(EndCond,
 
 Finally, we evaluate the exit value of the loop, to determine whether the loop should exit. This mirrors the condition evaluation for the if/then/else statement.
 
-```
+```c++
 // Create the "after loop" block and insert it.
 BasicBlock *LoopEndBB = Builder.GetInsertBlock();
 BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
@@ -488,7 +488,7 @@ Builder.SetInsertPoint(AfterBB);
 
 With the code for the body of the loop complete, we just need to finish up the control flow for it. This code remembers the end block (for the phi node), then creates the block for the loop exit (`afterloop`). Based on the value of the exit condition, it creates a conditional branch that chooses between executing the loop again and exiting the loop. Any future code is emitted in the `afterloop` block, so it sets the insertion position to it.
 
-```
+```c++
   // Add a new entry to the PHI node for the backedge.
   Variable->addIncoming(NextVar, LoopEndBB);
 

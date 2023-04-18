@@ -13,7 +13,7 @@ The point of going into user-defined operators in a tutorial like this is to sho
 
 The two specific features we’ll add are programmable unary operators (right now, Kaleidoscope has no unary operators at all) as well as binary operators. An example of this is:
 
-```
+```c++
 # Logical unary not.
 def unary!(v)
   if v then
@@ -47,7 +47,7 @@ We will break down implementation of these features into two parts: implementing
 
 Adding support for user-defined binary operators is pretty simple with our current framework. We’ll first add support for the unary/binary keywords:
 
-```
+```c++
 enum Token {
   ...
   // operators
@@ -66,7 +66,7 @@ This just adds lexer support for the unary and binary keywords, like we did in p
 
 On the other hand, we have to be able to represent the definitions of these new operators, in the “def binary| 5” part of the function definition. In our grammar so far, the “name” for the function definition is parsed as the “prototype” production and into the PrototypeAST AST node. To represent our new user-defined operators as prototypes, we have to extend the PrototypeAST AST node like this:
 
-```
+```c++
 /// PrototypeAST - This class represents the "prototype" for a function,
 /// which captures its argument names as well as if it is an operator.
 class PrototypeAST {
@@ -95,7 +95,7 @@ public:
 
 Basically, in addition to knowing a name for the prototype, we now keep track of whether it was an operator, and if it was, what precedence level the operator is at. The precedence is only used for binary operators (as you’ll see below, it just doesn’t apply for unary operators). Now that we have a way to represent the prototype for a user-defined operator, we need to parse it:
 
-```
+```c++
 /// prototype
 ///   ::= id '(' id* ')'
 ///   ::= binary LETTER number? (id, id)
@@ -156,7 +156,7 @@ This is all fairly straightforward parsing code, and we have already seen a lot 
 
 The next interesting thing to add, is codegen support for these binary operators. Given our current structure, this is a simple addition of a default case for our existing binary operator node:
 
-```
+```c++
 Value *BinaryExprAST::Codegen() {
   Value *L = LHS->Codegen();
   Value *R = RHS->Codegen();
@@ -188,7 +188,7 @@ As you can see above, the new code is actually really simple. It just does a loo
 
 The final piece of code we are missing, is a bit of top-level magic:
 
-```
+```c++
 Function *FunctionAST::Codegen() {
   NamedValues.clear();
 
@@ -217,7 +217,7 @@ Now we have useful user-defined binary operators. This builds a lot on the previ
 
 Since we don’t currently support unary operators in the Kaleidoscope language, we’ll need to add everything to support them. Above, we added simple support for the ‘unary’ keyword to the lexer. In addition to that, we need an AST node:
 
-```
+```c++
 /// UnaryExprAST - Expression class for a unary operator.
 class UnaryExprAST : public ExprAST {
   char Opcode;
@@ -231,7 +231,7 @@ public:
 
 This AST node is very simple and obvious by now. It directly mirrors the binary operator AST node, except that it only has one child. With this, we need to add the parsing logic. Parsing a unary operator is pretty simple: we’ll add a new function to do it:
 
-```
+```c++
 /// unary
 ///   ::= primary
 ///   ::= '!' unary
@@ -253,7 +253,7 @@ The grammar we add is pretty straightforward here. If we see a unary operator wh
 
 The problem with this function, is that we need to call ParseUnary from somewhere. To do this, we change previous callers of ParsePrimary to call ParseUnary instead:
 
-```
+```c++
 /// binoprhs
 ///   ::= ('+' unary)*
 static ExprAST *ParseBinOpRHS(int ExprPrec, ExprAST *LHS) {
@@ -276,7 +276,7 @@ static ExprAST *ParseExpression() {
 
 With these two simple changes, we are now able to parse unary operators and build the AST for them. Next up, we need to add parser support for prototypes, to parse the unary operator prototype. We extend the binary operator code above with:
 
-```
+```c++
 /// prototype
 ///   ::= id '(' id* ')'
 ///   ::= binary LETTER number? (id, id)
@@ -310,7 +310,7 @@ static PrototypeAST *ParsePrototype() {
 
 As with binary operators, we name unary operators with a name that includes the operator character. This assists us at code generation time. Speaking of, the final piece we need to add is codegen support for unary operators. It looks like this:
 
-```
+```c++
 Value *UnaryExprAST::Codegen() {
   Value *OperandV = Operand->Codegen();
   if (OperandV == 0) return 0;
@@ -330,7 +330,7 @@ This code is similar to, but simpler than, the code for binary operators. It is 
 
 It is somewhat hard to believe, but with a few simple extensions we’ve covered in the last chapters, we have grown a real-ish language. With this, we can do a lot of interesting things, including I/O, math, and a bunch of other things. For example, we can now add a nice sequencing operator (printd is defined to print out the specified value and a newline):
 
-```
+```c++
 ready> extern printd(x);
 Read extern:
 declare double @printd(double)
@@ -346,7 +346,7 @@ Evaluated to 0.000000
 
 We can also define a bunch of other “primitive” operations, such as:
 
-```
+```c++
 # Logical unary not.
 def unary!(v)
   if v then
@@ -389,7 +389,7 @@ def binary : 1 (x y) y;
 
 Given the previous if/then/else support, we can also define interesting functions for I/O. For example, the following prints out a character whose “density” reflects the value passed in: the lower the value, the denser the character:
 
-```
+```c++
 ready>
 
 extern putchard(char)
@@ -412,7 +412,7 @@ ready> printdensity(1): printdensity(2): printdensity(3):
 Evaluated to 0.000000
 Based on these simple primitive operations, we can start to define more interesting things. For example, here’s a little function that solves for the number of iterations it takes a function in the complex plane to converge:
 
-```
+```c++
 # Determine whether the specific location diverges.
 # Solve for z = z^2 + c in the complex plane.
 def mandleconverger(real imag iters creal cimag)
@@ -430,7 +430,7 @@ def mandleconverge(real imag)
 
 This `z = z2 + c` function is a beautiful little creature that is the basis for computation of the Mandelbrot Set. Our mandelconverge function returns the number of iterations that it takes for a complex orbit to escape, saturating to 255. This is not a very useful function by itself, but if you plot its value over a two-dimensional plane, you can see the Mandelbrot set. Given that we are limited to using putchard here, our amazing graphical output is limited, but we can whip together something using the density plotter above:
 
-```
+```c++
 # Compute and plot the mandlebrot set with the specified 2 dimensional range
 # info.
 def mandelhelp(xmin xmax xstep   ymin ymax ystep)
@@ -449,7 +449,7 @@ def mandel(realstart imagstart realmag imagmag)
 
 Given this, we can try plotting out the mandlebrot set! Lets try it out:
 
-```
+```c++
 ready> mandel(-2.3, -1.3, 0.05, 0.07);
 *******************************+++++++++++*************************************
 *************************+++++++++++++++++++++++*******************************

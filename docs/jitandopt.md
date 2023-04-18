@@ -6,7 +6,7 @@ Welcome to Chapter 4 of the "Implementing a language with LLVM" tutorial. Chapte
 
 Our demonstration for Chapter 3 is elegant and easy to extend. Unfortunately, it does not produce wonderful code. The IRBuilder, however, does give us obvious optimizations when compiling simple code:
 
-```
+```c++
 ready> def test(x) 1+2+x;
 Read function definition:
 define double @test(double %x) {
@@ -18,7 +18,7 @@ entry:
 
 This code is not a literal transcription of the AST built by parsing the input. That would be:
 
-```
+```c++
 ready> def test(x) 1+2+x;
 Read function definition:
 define double @test(double %x) {
@@ -37,7 +37,7 @@ Well, that was easy :). In practice, we recommend always using IRBuilder when ge
 
 On the other hand, the IRBuilder is limited by the fact that it does all of its analysis inline with the code as it is built. If you take a slightly more complex example:
 
-```
+```c++
 ready> def test(x) (1+2+x)*(x+(1+2));
 ready> Read function definition:
 define double @test(double %x) {
@@ -64,7 +64,7 @@ For Kaleidoscope, we are currently generating functions on the fly, one at a tim
 
 In order to get per-function optimizations going, we need to set up a FunctionPassManager to hold and organize the LLVM optimizations that we want to run. Once we have that, we can add a set of optimizations to run. The code looks like this:
 
-```
+```c++
 FunctionPassManager OurFPM(TheModule);
 
 // Set up the optimizer pipeline.  Start with registering info about how the
@@ -96,7 +96,7 @@ In this case, we choose to add 4 optimization passes. The passes we chose here a
 
 Once the PassManager is set up, we need to make use of it. We do this by running it after our newly created function is constructed (in `FunctionAST::Codegen`), but before it is returned to the client:
 
-```
+```c++
 if (Value *RetVal = Body->Codegen()) {
   // Finish off the function.
   Builder.CreateRet(RetVal);
@@ -113,7 +113,7 @@ if (Value *RetVal = Body->Codegen()) {
 
 As you can see, this is pretty straightforward. The FunctionPassManager optimizes and updates the LLVM `Function*` in place, improving (hopefully) its body. With this in place, we can try our test above again:
 
-```
+```c++
 ready> def test(x) (1+2+x)*(x+(1+2));
 ready> Read function definition:
 define double @test(double %x) {
@@ -139,7 +139,7 @@ In this section, we'll add JIT compiler support to our interpreter. The basic id
 
 In order to do this, we first declare and initialize the JIT. This is done by adding a global variable and a call in main:
 
-```
+```c++
 static ExecutionEngine *TheExecutionEngine;
 ...
 int main() {
@@ -154,7 +154,7 @@ This creates an abstract `Execution Engine` which can be either a JIT compiler o
 
 Once the ExecutionEngine is created, the JIT is ready to be used. There are a variety of APIs that are useful, but the simplest one is the `getPointerToFunction(F)` method. This method JIT compiles the specified LLVM Function and returns a function pointer to the generated machine code. In our case, this means that we can change the code that parses a top-level expression to look like this:
 
-```
+```c++
 static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
   if (FunctionAST *F = ParseTopLevelExpr()) {
@@ -175,7 +175,7 @@ Recall that we compile top-level expressions into a self-contained LLVM function
 
 With just these two changes, lets see how Kaleidoscope works now!
 
-```
+```c++
 ready> 4+5;
 Read top-level expression:
 define double @0() {
@@ -188,7 +188,7 @@ Evaluated to 9.000000
 
 Well this looks like it is basically working. The dump of the function shows the "no argument function that always returns double" that we synthesize for each top-level expression that is typed in. This demonstrates very basic functionality, but can we do more?
 
-```
+```c++
 ready> def testfunc(x y) x + y*2;
 Read function definition:
 define double @testfunc(double %x, double %y) {
@@ -213,7 +213,7 @@ This illustrates that we can now call user code, but there is something a bit su
 
 The JIT provides a number of other more advanced interfaces for things like freeing allocated machine code, rejit'ing functions to update them, etc. However, even with this simple code, we get some surprisingly powerful capabilities - check this out (I removed the dump of the anonymous functions, you should get the idea by now :) :
 
-```
+```c++
 ready> extern sin(x);
 Read extern:
 declare double @sin(double)
@@ -260,7 +260,7 @@ The LLVM JIT provides a number of interfaces (look in the ExecutionEngine.h file
 
 One interesting application of this is that we can now extend the language by writing arbitrary C++ code to implement operations. For example, if we add:
 
-```
+```c++
 /// putchard - putchar that takes a double and returns 0.
 extern "C"
 double putchard(double X) {

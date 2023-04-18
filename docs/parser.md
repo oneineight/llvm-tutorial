@@ -9,7 +9,7 @@ The parser we will build uses a combination of Recursive Descent Parsing and Ope
 
 The AST for a program captures its behavior in such a way that it is easy for later stages of the compiler (e.g. code generation) to interpret. We basically want one object for each construct in the language, and the AST should closely model the language. In Kaleidoscope, we have expressions, a prototype, and a function object. We'll start with expressions first:
 
-```
+```c++
 /// ExprAST - Base class for all expression nodes.
 class ExprAST {
 public:
@@ -28,7 +28,7 @@ The code above shows the definition of the base ExprAST class and one subclass w
 
 Right now we only create the AST, so there are no useful accessor methods on them. It would be very easy to add a virtual method to pretty print the code, for example. Here are the other expression AST node definitions that we'll use in the basic form of the Kaleidoscope language:
 
-```
+```c++
 /// VariableExprAST - Expression class for referencing a variable, like "a".
 class VariableExprAST : public ExprAST {
   std::string Name;
@@ -59,7 +59,7 @@ This is all (intentionally) rather straight-forward: variables capture the varia
 
 For our basic language, these are all of the expression nodes we'll define. Because it doesn't have conditional control flow, it isn't Turing-complete; we'll fix that in a later installment. The two things we need next are a way to talk about the interface to a function, and a way to talk about functions themselves:
 
-```
+```c++
 /// PrototypeAST - This class represents the "prototype" for a function,
 /// which captures its name, and its argument names (thus implicitly the number
 /// of arguments the function takes).
@@ -90,7 +90,7 @@ With this scaffolding, we can now talk about parsing expressions and function bo
 
 Now that we have an AST to build, we need to define the parser code to build it. The idea here is that we want to parse something like `x+y` (which is returned as three tokens by the lexer) into an AST that could be generated with calls like this:
 
-```
+```c++
 ExprAST *X = new VariableExprAST("x");
 ExprAST *Y = new VariableExprAST("y");
 ExprAST *Result = new BinaryExprAST('+', X, Y);
@@ -107,7 +107,7 @@ static int getNextToken() {
 
 This implements a simple token buffer around the lexer. This allows us to look one token ahead at what the lexer is returning. Every function in our parser will assume that CurTok is the current token that needs to be parsed.
 
-```
+```c++
 /// Error* - These are little helper functions for error handling.
 ExprAST *Error(const char *Str) { fprintf(stderr, "Error: %s\n", Str);return 0;}
 PrototypeAST *ErrorP(const char *Str) { Error(Str); return 0; }
@@ -123,7 +123,7 @@ With these basic helper functions, we can implement the first piece of our gramm
 
 We start with numeric literals, because they are the simplest to process. For each production in our grammar, we'll define a function which parses that production. For numeric literals, we have:
 
-```
+```c++
 /// numberexpr ::= number
 static ExprAST *ParseNumberExpr() {
   ExprAST *Result = new NumberExprAST(NumVal);
@@ -136,7 +136,7 @@ This routine is very simple: it expects to be called when the current token is a
 
 There are some interesting aspects to this. The most important one is that this routine eats all of the tokens that correspond to the production and returns the lexer buffer with the next token (which is not part of the grammar production) ready to go. This is a fairly standard way to go for recursive descent parsers. For a better example, the parenthesis operator is defined like this:
 
-```
+```c++
 /// parenexpr ::= '(' expression ')'
 static ExprAST *ParseParenExpr() {
   getNextToken();  // eat (.
@@ -158,7 +158,7 @@ This function illustrates a number of interesting things about the parser:
 
 The next simple production is for handling variable references and function calls:
 
-```
+```c++
 /// identifierexpr
 ///   ::= identifier
 ///   ::= identifier '(' expression* ')'
@@ -198,7 +198,7 @@ This routine follows the same style as the other routines. (It expects to be cal
 
 Now that we have all of our simple expression-parsing logic in place, we can define a helper function to wrap it together into one entry point. We call this class of expressions "primary" expressions, for reasons that will become more clear later in the tutorial. In order to parse an arbitrary primary expression, we need to determine what sort of expression it is:
 
-```
+```c++
 /// primary
 ///   ::= identifierexpr
 ///   ::= numberexpr
@@ -224,7 +224,7 @@ Binary expressions are significantly harder to parse because they are often ambi
 
 There are many ways to handle this, but an elegant and efficient way is to use Operator-Precedence Parsing. This parsing technique uses the precedence of binary operators to guide recursion. To start with, we need a table of precedences:
 
-```
+```c++
 /// BinopPrecedence - This holds the precedence for each binary operator that is
 /// defined.
 static std::map<char, int> BinopPrecedence;
@@ -257,7 +257,7 @@ With the helper above defined, we can now start parsing binary expressions. The 
 
 To start, an expression is a primary expression potentially followed by a sequence of [binop,primaryexpr] pairs:
 
-```
+```c++
 /// expression
 ///   ::= primary binoprhs
 ///
@@ -273,7 +273,7 @@ ParseBinOpRHS is the function that parses the sequence of pairs for us. It takes
 
 The precedence value passed into ParseBinOpRHS indicates the minimal operator precedence that the function is allowed to eat. For example, if the current pair stream is [+, x] and ParseBinOpRHS is passed in a precedence of 40, it will not consume any tokens (because the precedence of `+` is only 20). With this in mind, ParseBinOpRHS starts with:
 
-```
+```c++
 /// binoprhs
 ///   ::= ('+' primary)*
 static ExprAST *ParseBinOpRHS(int ExprPrec, ExprAST *LHS) {
@@ -289,7 +289,7 @@ static ExprAST *ParseBinOpRHS(int ExprPrec, ExprAST *LHS) {
 
 This code gets the precedence of the current token and checks to see if if is too low. Because we defined invalid tokens to have a precedence of -1, this check implicitly knows that the pair-stream ends when the token stream runs out of binary operators. If this check succeeds, we know that the token is a binary operator and that it will be included in this expression:
 
-```
+```c++
 // Okay, we know this is a binop.
 int BinOp = CurTok;
 getNextToken();  // eat binop
@@ -303,7 +303,7 @@ As such, this code eats (and remembers) the binary operator and then parses the 
 
 Now that we parsed the left-hand side of an expression and one pair of the RHS sequence, we have to decide which way the expression associates. In particular, we could have `(a+b) binop unparsed` or `a + (b binop unparsed)`. To determine this, we look ahead at `binop` to determine its precedence and compare it to BinOp's precedence (which is `+` in this case):
 
-```
+```c++
 // If BinOp binds less tightly with RHS than the operator after RHS, let
 // the pending operator take RHS as its LHS.
 int NextPrec = GetTokPrecedence();
@@ -312,7 +312,7 @@ if (TokPrec < NextPrec) {
 
 If the precedence of the binop to the right of "RHS" is lower or equal to the precedence of our current operator, then we know that the parentheses associate as `(a+b) binop ...`. In our example, the current operator is `+` and the next operator is `+`, we know that they have the same precedence. In this case we'll create the AST node for `a+b`, and then continue parsing:
 
-```
+```c++
       ... if body omitted ...
     }
 
@@ -326,7 +326,7 @@ In our example above, this will turn `a+b+` into `(a+b)` and execute the next it
 
 The critical question left here is "how can the if condition parse the right hand side in full"? In particular, to build the AST correctly for our example, it needs to get all of `(c+d)*e*f` as the RHS expression variable. The code to do this is surprisingly simple (code from the above two blocks duplicated for context):
 
-```
+```c++
     // If BinOp binds less tightly with RHS than the operator after RHS, let
     // the pending operator take RHS as its LHS.
     int NextPrec = GetTokPrecedence();
@@ -351,7 +351,7 @@ This wraps up handling of expressions. At this point, we can point the parser at
 
 The next thing missing is handling of function prototypes. In Kaleidoscope, these are used both for `extern` function declarations as well as function body definitions. The code to do this is straight-forward and not very interesting (once you've survived expressions):
 
-```
+```c++
 /// prototype
 ///   ::= id '(' id* ')'
 static PrototypeAST *ParsePrototype() {
@@ -380,7 +380,7 @@ static PrototypeAST *ParsePrototype() {
 
 Given this, a function definition is very simple, just a prototype plus an expression to implement the body:
 
-```
+```c++
 /// definition ::= 'def' prototype expression
 static FunctionAST *ParseDefinition() {
   getNextToken();  // eat def.
@@ -395,7 +395,7 @@ static FunctionAST *ParseDefinition() {
 
 In addition, we support `extern` to declare functions like `sin` and `cos` as well as to support forward declaration of user functions. These ‘extern's are just prototypes with no body:
 
-```
+```c++
 /// external ::= 'extern' prototype
 static PrototypeAST *ParseExtern() {
   getNextToken();  // eat extern.
@@ -405,7 +405,7 @@ static PrototypeAST *ParseExtern() {
 
 Finally, we'll also let the user type in arbitrary top-level expressions and evaluate them on the fly. We will handle this by defining anonymous nullary (zero argument) functions for them:
 
-```
+```c++
 /// toplevelexpr ::= expression
 static FunctionAST *ParseTopLevelExpr() {
   if (ExprAST *E = ParseExpression()) {
@@ -424,7 +424,7 @@ Now that we have all the pieces, let's build a little driver that will let us ac
 
 The driver for this simply invokes all of the parsing pieces with a top-level dispatch loop. There isn't much interesting here, so I'll just include the top-level loop. See below for full code in the "Top-Level Parsing" section.
 
-```
+```c++
 /// top ::= definition | external | expression | ';'
 static void MainLoop() {
   while (1) {
@@ -446,7 +446,7 @@ The most interesting part of this is that we ignore top-level semicolons. Why is
 
 With just under 400 lines of commented code (240 lines of non-comment, non-blank code), we fully defined our minimal language, including a lexer, parser, and AST builder. With this done, the executable will validate Kaleidoscope code and tell us if it is grammatically invalid. For example, here is a sample interaction:
 
-```
+```c++
 $ ./a.out
 ready> def foo(x y) x+foo(y, 4.0);
 Parsed a function definition.
