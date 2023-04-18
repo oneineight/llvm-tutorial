@@ -1,8 +1,7 @@
-Mutable Variables
-=================
+# 7. Mutable Variables
 
 
-#7.1 Chapter 7 Introduction
+## 7.1 Chapter 7 Introduction
 
 Welcome to Chapter 7 of the “Implementing a language with LLVM” tutorial. In chapters 1 through 6, we’ve built a very respectable, albeit simple, functional programming language. In our journey, we learned some parsing techniques, how to build and represent an AST, how to build LLVM IR, and how to optimize the resultant code as well as JIT compile it.
 
@@ -11,7 +10,7 @@ While Kaleidoscope is interesting as a functional language, the fact that it is 
 The short (and happy) summary of this chapter is that there is no need for your front-end to build SSA form: LLVM provides highly tuned and well tested support for this, though the way it works is a bit unexpected for some.
 
 
-#7.2 Why is this a hard problem?
+## 7.2 Why is this a hard problem?
 
 To understand why mutable variables cause complexities in SSA construction, consider this extremely simple C example:
 
@@ -56,7 +55,7 @@ In this example, the loads from the G and H global variables are explicit in the
 The question for this article is “who places the phi nodes when lowering assignments to mutable variables?”. The issue here is that LLVM requires that its IR be in SSA form: there is no “non-ssa” mode for it. However, SSA construction requires non-trivial algorithms and data structures, so it is inconvenient and wasteful for every front-end to have to reproduce this logic.
 
 
-#7.3 Memory in LLVM
+## 7.3 Memory in LLVM
 
 The ‘trick’ here is that while LLVM does require all register values to be in SSA form, it does not require (or permit) memory objects to be in SSA form. In the example above, note that the loads from G and H are direct accesses to G and H: they are not renamed or versioned. This differs from some other compiler systems, which do try to version memory objects. In LLVM, instead of encoding dataflow analysis of memory into the LLVM IR, it is handled with Analysis Passes which are computed on demand.
 
@@ -147,7 +146,7 @@ Needed for debug info generation: Debug information in LLVM relies on having the
 If nothing else, this makes it much easier to get your front-end up and running, and is very simple to implement. Lets extend Kaleidoscope with mutable variables now!
 
 
-#7.4 Mutable Variables in Kaleidoscope
+## 7.4 Mutable Variables in Kaleidoscope
 
 Now that we know the sort of problem we want to tackle, lets see what this looks like in the context of our little Kaleidoscope language. We’re going to add two features:
 
@@ -183,7 +182,7 @@ fibi(10);
 In order to mutate variables, we have to change our existing variables to use the “alloca trick”. Once we have that, we’ll add our new operator, then extend Kaleidoscope to support new variable definitions.
 
 
-#7.5 Adjusting Existing Variables for Mutation
+## 7.5 Adjusting Existing Variables for Mutation
 
 The symbol table in Kaleidoscope is managed at code generation time by the `NamedValues` map. This map currently keeps track of the LLVM `Value*` that holds the double value for the named variable. In order to support mutation, we need to change this slightly, so that it NamedValues holds the memory location of the variable in question. Note that this change is a refactoring: it changes the structure of the code, but does not (by itself) change the behavior of the compiler. All of these changes are isolated in the Kaleidoscope code generator.
 
@@ -378,7 +377,7 @@ Here we see that the simplifycfg pass decided to clone the return instruction in
 Now that all symbol table references are updated to use stack variables, we’ll add the assignment operator.
 
 
-#7.6 New Assignment Operator
+## 7.6 New Assignment Operator
 
 With our current framework, adding a new assignment operator is really simple. We will parse it just like any other binary operator, but handle it internally (instead of allowing the user to define it). The first step is to set a precedence:
 
@@ -444,7 +443,7 @@ test(123);
 When run, this example prints “123” and then “4”, showing that we did actually mutate the value! Okay, we have now officially implemented our goal: getting this to work requires SSA construction in the general case. However, to be really useful, we want the ability to define our own local variables, lets add this next!
 
 
-#7.7 User-defined Local Variables
+## 7.7 User-defined Local Variables
 
 Adding var/in is just like any other other extensions we made to Kaleidoscope: we extend the lexer, the parser, the AST and the code generator. The first step for adding our new ‘var/in’ construct is to extend the lexer. As before, this is pretty trivial, the code looks like this:
 

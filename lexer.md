@@ -1,7 +1,6 @@
-Kaleidoscope Language and its Lexer
-===================================
+# 1. Kaleidoscope Language and its Lexer
 
-#1.1 The Basic Language
+## 1.1 The Basic Language
 
 This tutorial will be illustrated with a toy language that we’ll call “Kaleidoscope” (derived from “meaning beautiful, form, and view”). Kaleidoscope is a procedural language that allows you to define functions, use conditionals, math, etc. Over the course of the tutorial, we’ll extend Kaleidoscope to support the if/then/else construct, a for loop, user defined operators, JIT compilation with a simple command line interface, etc.
 
@@ -33,7 +32,7 @@ A more interesting example is included in Chapter 6 where we write a little Kale
 
 Lets dive into the implementation of this language!
 
-#1.2 The Lexer
+## 1.2 The Lexer
 When it comes to implementing a language, the first thing needed is the ability to process a text file and recognize what it says. The traditional way to do this is to use a “lexer” (aka ‘scanner’) to break the input up into “tokens”. Each token returned by the lexer includes a token code and potentially some metadata (e.g. the numeric value of a number). First, we define the possibilities:
 
 ```

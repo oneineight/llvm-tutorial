@@ -1,12 +1,11 @@
-Implementing a Parser and AST
-=============================
+# 2. Implementing a Parser and AST
 
 Welcome to Chapter 2 of the "Implementing a language with LLVM" tutorial. This chapter shows you how to use the lexer, built in Chapter 1, to build a full parser for our Kaleidoscope language. Once we have a parser, we'll define and build an Abstract Syntax Tree (AST).
 
 The parser we will build uses a combination of Recursive Descent Parsing and Operator-Precedence Parsing to parse the Kaleidoscope language (the latter for binary expressions and the former for everything else). Before we get to parsing though, lets talk about the output of the parser: the Abstract Syntax Tree.
 
 
-#2.1 The Abstract Syntax Tree (AST)
+## 2.1 The Abstract Syntax Tree (AST)
 
 The AST for a program captures its behavior in such a way that it is easy for later stages of the compiler (e.g. code generation) to interpret. We basically want one object for each construct in the language, and the AST should closely model the language. In Kaleidoscope, we have expressions, a prototype, and a function object. We'll start with expressions first:
 
@@ -87,7 +86,7 @@ In Kaleidoscope, functions are typed with just a count of their arguments. Since
 With this scaffolding, we can now talk about parsing expressions and function bodies in Kaleidoscope.
 
 
-#2.2 Parser Basics
+## 2.2 Parser Basics
 
 Now that we have an AST to build, we need to define the parser code to build it. The idea here is that we want to parse something like `x+y` (which is returned as three tokens by the lexer) into an AST that could be generated with calls like this:
 
@@ -120,7 +119,7 @@ The Error routines are simple helper routines that our parser will use to handle
 With these basic helper functions, we can implement the first piece of our grammar: numeric literals.
 
 
-#2.3 Basic Expression Parsing
+## 2.3 Basic Expression Parsing
 
 We start with numeric literals, because they are the simplest to process. For each production in our grammar, we'll define a function which parses that production. For numeric literals, we have:
 
@@ -219,7 +218,7 @@ Now that you see the definition of this function, it is more obvious why we can 
 Now that basic expressions are handled, we need to handle binary expressions. They are a bit more complex.
 
 
-#2.4 Binary Expression Parsing
+## 2.4 Binary Expression Parsing
 
 Binary expressions are significantly harder to parse because they are often ambiguous. For example, when given the string `x+y*z`, the parser can choose to parse it as either `(x+y)*z` or `x+(y*z)`. With common definitions from mathematics, we expect the later parse, because `*` (multiplication) has higher precedence than `+` (addition).
 
@@ -348,7 +347,7 @@ Finally, on the next iteration of the while loop, the `+g` piece is parsed and a
 This wraps up handling of expressions. At this point, we can point the parser at an arbitrary token stream and build an expression from it, stopping at the first token that is not part of the expression. Next up we need to handle function definitions, etc.
 
 
-#2.5 Parsing the Rest
+## 2.5 Parsing the Rest
 
 The next thing missing is handling of function prototypes. In Kaleidoscope, these are used both for `extern` function declarations as well as function body definitions. The code to do this is straight-forward and not very interesting (once you've survived expressions):
 
@@ -421,7 +420,7 @@ static FunctionAST *ParseTopLevelExpr() {
 Now that we have all the pieces, let's build a little driver that will let us actually execute this code we've built!
 
 
-#2.6 The Driver
+## 2.6 The Driver
 
 The driver for this simply invokes all of the parsing pieces with a top-level dispatch loop. There isn't much interesting here, so I'll just include the top-level loop. See below for full code in the "Top-Level Parsing" section.
 
@@ -443,7 +442,8 @@ static void MainLoop() {
 
 The most interesting part of this is that we ignore top-level semicolons. Why is this, you ask? The basic reason is that if you type `4 + 5` at the command line, the parser doesn't know whether that is the end of what you will type or not. For example, on the next line you could type `def foo...` in which case `4+5` is the end of a top-level expression. Alternatively you could type `* 6`, which would continue the expression. Having top-level semicolons allows you to type `4+5;`, and the parser will know you are done.
 
-#2.8. Conclusions
+## 2.8. Conclusions
+
 With just under 400 lines of commented code (240 lines of non-comment, non-blank code), we fully defined our minimal language, including a lexer, parser, and AST builder. With this done, the executable will validate Kaleidoscope code and tell us if it is grammatically invalid. For example, here is a sample interaction:
 
 ```
