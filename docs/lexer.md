@@ -6,7 +6,7 @@ This tutorial will be illustrated with a toy language that we’ll call “Kalei
 
 Because we want to keep things simple, the only datatype in Kaleidoscope is a 64-bit floating point type (aka `double` in C parlance). As such, all values are implicitly double precision and the language doesn’t require type declarations. This gives the language a very nice and simple syntax. For example, the following simple example computes Fibonacci numbers:
 
-```
+```c++
 # Compute the x'th fibonacci number.
 def fib(x)
   if x < 3 then
@@ -20,7 +20,7 @@ fib(40)
 
 We also allow Kaleidoscope to call into standard library functions (the LLVM JIT makes this completely trivial). This means that you can use the `extern` keyword to define a function before you use it (this is also useful for mutually recursive functions). For example:
 
-```
+```c++
 extern sin(arg);
 extern cos(arg);
 extern atan2(arg1 arg2);
@@ -35,7 +35,7 @@ Lets dive into the implementation of this language!
 ## 1.2 The Lexer
 When it comes to implementing a language, the first thing needed is the ability to process a text file and recognize what it says. The traditional way to do this is to use a “lexer” (aka ‘scanner’) to break the input up into “tokens”. Each token returned by the lexer includes a token code and potentially some metadata (e.g. the numeric value of a number). First, we define the possibilities:
 
-```
+```c++
 // The lexer returns tokens [0-255] if it is an unknown character, otherwise one
 // of these for known things.
 enum Token {
@@ -57,7 +57,7 @@ Each token returned by our lexer will either be one of the Token enum values or 
 
 The actual implementation of the lexer is a single function named gettok. The gettok function is called to return the next token from standard input. Its definition starts as:
 
-```
+```c++
 /// gettok - Return the next token from standard input.
 static int gettok() {
   static int LastChar = ' ';
@@ -71,7 +71,7 @@ gettok works by calling the C getchar() function to read characters one at a tim
 
 The next thing gettok needs to do is recognize identifiers and specific keywords like `def`. Kaleidoscope does this with this simple loop:
 
-```
+```c++
 if (isalpha(LastChar)) { // identifier: [a-zA-Z][a-zA-Z0-9]*
   IdentifierStr = LastChar;
   while (isalnum((LastChar = getchar())))
@@ -85,7 +85,7 @@ if (isalpha(LastChar)) { // identifier: [a-zA-Z][a-zA-Z0-9]*
 
 Note that this code sets the `IdentifierStr` global whenever it lexes an identifier. Also, since language keywords are matched by the same loop, we handle them here inline. Numeric values are similar:
 
-```
+```c++
 if (isdigit(LastChar) || LastChar == '.') {   // Number: [0-9.]+
   std::string NumStr;
   do {
@@ -100,7 +100,7 @@ if (isdigit(LastChar) || LastChar == '.') {   // Number: [0-9.]+
 
 This is all pretty straight-forward code for processing input. When reading a numeric value from input, we use the C strtod function to convert it to a numeric value that we store in NumVal. Note that this isn’t doing sufficient error checking: it will incorrectly read "1.23.45.67" and handle it as if you typed in "1.23". Feel free to extend it :). Next we handle comments:
 
-```
+```c++
 if (LastChar == '#') {
   // Comment until end of line.
   do LastChar = getchar();
@@ -113,7 +113,7 @@ if (LastChar == '#') {
 
 We handle comments by skipping to the end of the line and then return the next token. Finally, if the input doesn’t match one of the above cases, it is either an operator character like `+` or the end of the file. These are handled with this code:
 
-```
+```c++
   // Check for end of file.  Don't eat the EOF.
   if (LastChar == EOF)
     return tok_eof;
